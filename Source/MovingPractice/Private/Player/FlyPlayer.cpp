@@ -7,24 +7,33 @@ AFlyPlayer::AFlyPlayer()
     PrimaryActorTick.bCanEverTick = true;
 
     // 드론 전용 이동 속도와 회전 속도 설정
-    MoveSpeed = 10.0f;
-    RotationSpeed = 100.0f;
+    MoveSpeed = 100.0f;
 }
 
 void AFlyPlayer::Tick(float DeltaTime)
 {
     Super::Tick(DeltaTime);
 
-    // 부모 클래스의 CurrentRotation 사용
+    // Roll 값을 점진적으로 줄여 자연스러운 회전 감속 구현
+    if (FMath::IsNearlyZero(RotationInput.X, 0.01f))
+    {
+        RotationInput.X = 0.0f; // Roll 값 완전히 멈춤
+    }
+    else
+    {
+        RotationInput.X = FMath::FInterpTo(RotationInput.X, 0.0f, DeltaTime, 5.0f); // 감속 처리
+    }
+
+    // 회전 처리
     CurrentRotation.Pitch += RotationInput.Y * RotationSpeed * DeltaTime;
     CurrentRotation.Yaw += RotationInput.Z * RotationSpeed * DeltaTime;
     CurrentRotation.Roll += RotationInput.X * RotationSpeed * DeltaTime;
     SetActorRotation(CurrentRotation);
 
-    // 이동 처리
+    // 로컬 좌표계 기반 이동 처리
     FVector Forward = GetActorForwardVector() * Velocity.X;
     FVector Right = GetActorRightVector() * Velocity.Y;
-    FVector Up = FVector::UpVector * Velocity.Z;
+    FVector Up = GetActorUpVector() * Velocity.Z; // 드론의 Up 벡터 사용 (바라보는 방향)
 
     FVector Movement = (Forward + Right + Up) * MoveSpeed * DeltaTime;
     AddActorLocalOffset(Movement, true);
@@ -36,11 +45,7 @@ void AFlyPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 
     if (UEnhancedInputComponent* EnhancedInput = CastChecked<UEnhancedInputComponent>(PlayerInputComponent))
     {
-        // 기존 입력 바인딩 유지
-        EnhancedInput->BindAction(MoveForwardAction, ETriggerEvent::Triggered, this, &AMovingPlayer::MoveForward);
-        EnhancedInput->BindAction(MoveRightAction, ETriggerEvent::Triggered, this, &AMovingPlayer::MoveRight);
-
-        // 드론 전용 입력 바인딩 추가
+        // 비행 입력 바인딩
         EnhancedInput->BindAction(MoveUpAction, ETriggerEvent::Triggered, this, &AFlyPlayer::MoveUp);
         EnhancedInput->BindAction(LookAction, ETriggerEvent::Triggered, this, &AFlyPlayer::Look);
         EnhancedInput->BindAction(RollAction, ETriggerEvent::Triggered, this, &AFlyPlayer::Roll);
@@ -49,8 +54,18 @@ void AFlyPlayer::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent
 
 void AFlyPlayer::MoveUp(const FInputActionValue& Value)
 {
-    float UpValue = Value.Get<float>();
-    Velocity.Z = UpValue * MoveSpeed; // Z축 이동 (상승/하강)
+    float Up = Value.Get<float>();
+
+
+    // 입력 값이 0일 때 정지
+    if (FMath::IsNearlyZero(Up))
+    {
+        Velocity.Z = 0.0f; // Z축 이동 멈춤
+    }
+    else
+    {
+        Velocity.Z = Up; // Z축 이동 값 저장 (로컬 Up 벡터에 따라 적용)
+    }
 }
 
 void AFlyPlayer::Look(const FInputActionValue& Value)
@@ -62,6 +77,6 @@ void AFlyPlayer::Look(const FInputActionValue& Value)
 
 void AFlyPlayer::Roll(const FInputActionValue& Value)
 {
-    float RollValue = Value.Get<float>();
-    RotationInput.X = RollValue; // Roll
+    float Roll = Value.Get<float>();
+    RotationInput.X = Roll; // Roll
 }

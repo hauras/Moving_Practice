@@ -18,7 +18,6 @@ class MOVINGPRACTICE_API AMovingPlayer : public APawn
 public:
     AMovingPlayer();
 
-    // 입력 처리 함수 (public으로 변경)
     void MoveForward(const FInputActionValue& Value);
     void MoveRight(const FInputActionValue& Value);
     void Look(const FInputActionValue& Value);
